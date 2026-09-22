@@ -27,7 +27,7 @@ global.fetch=async(url,init={})=>{
  if(u.endsWith('/pipeline')){
   const [[op,key,...args]]=JSON.parse(init.body);let result;
   switch(op){case 'GET':result=redisMap.get(key)||null;break;
-   case 'SET':redisMap.set(key,args[0]);result='OK';break;
+   case 'SET':if(args.includes('NX')&&redisMap.has(key)){result=null;}else{redisMap.set(key,args[0]);result='OK';}break;
    case 'INCR':result=(counters.get(key)||0)+1;counters.set(key,result);break;
    case 'EXPIRE':result=1;break;
    case 'DEL':redisMap.delete(key);result=1;break;
@@ -60,17 +60,17 @@ test('combo cobra por par e confirma dois ingressos por unidade via webhook',asy
  assert.equal(amount('combo',0),null);
  assert.equal(amount('combo',1.5),null);
  assert.equal(amount('combo',6),null);
- const data={ticket:'combo',quantity:2,customer,request_id:'c1234567-1234-4234-8234-123456789012'};
+ const data={ticket:'combo',quantity:1,customer,request_id:'c1234567-1234-4234-8234-123456789012'};
  const a=await call(create,data),b=await call(create,data);
  assert.equal(a.statusCode,200);
- assert.equal(a.body.amount_cents,17796);
- assert.equal(a.body.subtotal_cents,16000);
- assert.equal(a.body.service_fee_cents,1796);
+ assert.equal(a.body.amount_cents,8898);
+ assert.equal(a.body.subtotal_cents,8000);
+ assert.equal(a.body.service_fee_cents,898);
  const order=verify(a.body.token);
  assert.equal(order.ref,verify(b.body.token).ref);
  assert.equal(verify(sign({...order,amount:8000})),null);
  const tx=txMap.get(order.ref);
- assert.equal(tx.metadata.service_fee_cents,'1796');
+ assert.equal(tx.metadata.service_fee_cents,'898');
  assert.equal((await call(status,{token:a.body.token})).body.paid,false);
  const event={id:'evt_testcombo',created:Math.floor(Date.now()/1000),type:'transaction.paid',data:{...tx,status:'PAID'}};
  const raw=Buffer.from(JSON.stringify(event));
@@ -81,9 +81,40 @@ test('combo cobra por par e confirma dois ingressos por unidade via webhook',asy
  assert.equal(response.statusCode,200);
  const paid=await call(status,{token:a.body.token});
  assert.equal(paid.body.paid,true);
- assert.equal(paid.body.order.quantity,4);
+ assert.equal(paid.body.order.quantity,2);
  assert.equal(paid.body.order.ticket,'Combo Amigo · Unissex');
- assert.equal(paid.body.order.amount_cents,17796);
+ assert.equal(paid.body.order.amount_cents,8898);
+});
+
+test('combo bloqueia quantidade adulterada, CPF repetido e pedidos simultâneos',async()=>{
+ const before=providerCalls;
+ const data={ticket:'combo',quantity:1,customer,request_id:'e1234567-1234-4234-8234-123456789012'};
+ assert.equal((await call(create,{...data,quantity:2})).statusCode,422);
+ assert.equal((await call(create,{...data,customer:{...customer,cpf:'529.982.247-25',email:'outro@example.com'}})).statusCode,409);
+ assert.equal(providerCalls,before);
+ const race={...data,customer:{...customer,cpf:'11144477735'}};
+ const results=await Promise.all([call(create,race),call(create,{...race,request_id:'f1234567-1234-4234-8234-123456789012'})]);
+ assert.deepEqual(results.map(r=>r.statusCode).sort(),[200,409]);
+ const entry=[...redisMap.entries()].find(([k,v])=>k.startsWith('hp10:combo-cpf:')&&JSON.parse(v).ref===verify(results.find(r=>r.statusCode===200).body.token).ref);
+ const value=JSON.parse(entry[1]);
+ assert.ok(!entry[0].includes(race.customer.cpf));
+ redisMap.set(entry[0],JSON.stringify({...value,created:Date.now()-24*3600000}));
+ assert.equal((await call(create,race)).statusCode,409);
+});
+
+test('combo falha fechado sem Redis ou com Redis indisponível',async()=>{
+ const url=process.env.UPSTASH_REDIS_REST_URL;
+ const before=providerCalls;
+ const data={ticket:'combo',quantity:1,customer,request_id:'b1234567-1234-4234-8234-123456789012'};
+ try{
+  delete process.env.UPSTASH_REDIS_REST_URL;
+  assert.equal((await call(create,data)).statusCode,503);
+  process.env.UPSTASH_REDIS_REST_URL=url;
+  const currentFetch=global.fetch;
+  global.fetch=async(u,i)=>{if(String(u).endsWith('/pipeline'))throw Error('Unavailable');return currentFetch(u,i);};
+  try{assert.equal((await call(create,data)).statusCode,502);}finally{global.fetch=currentFetch;}
+  assert.equal(providerCalls,before);
+ }finally{process.env.UPSTASH_REDIS_REST_URL=url;}
 });
 
 test('gera PIX uma vez e conserva referência/idempotência nos retries',async()=>{

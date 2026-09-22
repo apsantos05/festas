@@ -10,6 +10,7 @@ module.exports=async function handler(req,res){
  if(req.method!=='POST'){res.setHeader('Allow','POST');return send(res,405,{error:'Método não permitido.'});}
  if(!process.env.BRAVOPAY_API_KEY||!process.env.ORDER_SIGNING_SECRET||process.env.ORDER_SIGNING_SECRET.length<32)return send(res,503,{error:'Pagamento temporariamente indisponível.'});
  const b=req.body||{};const ticket=String(b.ticket||'');const quantity=Number(b.quantity);const expected=amount(ticket,quantity);
+ if(ticket==='combo'&&quantity!==1)return send(res,422,{error:'O Combo Amigo é limitado a 1 combo (2 ingressos) por CPF.'});
  if(expected===null)return send(res,422,{error:'Selecione um ingresso e uma quantidade válida (1 a 5).'});
  const name=text(b.customer?.name);const email=text(b.customer?.email,180).toLowerCase();const cpf=digits(b.customer?.cpf);const phone=digits(b.customer?.phone);
  if(name.length<3||!/^\S+@\S+\.\S+$/.test(email)||!cpfValid(cpf)||phone.length<10||phone.length>13)return send(res,422,{error:'Revise nome, e-mail, CPF e WhatsApp.'});
@@ -25,6 +26,22 @@ module.exports=async function handler(req,res){
  try{
   const quota=await redis.limit('create',30);
   if(!quota.allowed)return send(res,429,{error:'Muitas compras simultâneas. Aguarde alguns instantes e tente novamente.',retry_after:quota.retryAfter},{'Retry-After':String(quota.retryAfter)});
+  if(ticket==='combo'){
+   // Reserva atômica e durável: tentativas simultâneas não podem usar o mesmo CPF.
+   // Não guardar o CPF em texto aberto nem liberar em falhas ambíguas do provedor.
+   if(!redis.configured())return send(res,503,{error:'Combo Amigo temporariamente indisponível. Tente novamente mais tarde.'});
+   const cpfHash=crypto.createHmac('sha256',process.env.ORDER_SIGNING_SECRET).update(`combo-cpf:2026:${cpf}`).digest('hex');
+   const key=`hp10:combo-cpf:${cpfHash}`;
+   const reservation={ref,created:Date.now()};
+   const acquired=await redis.command(['SET',key,JSON.stringify(reservation),'NX']);
+   if(acquired!=='OK'){
+    const previous=await redis.get(key);
+    // Retries da mesma tentativa somente dentro da janela de idempotência.
+    if(!previous||previous.ref!==ref||Date.now()-previous.created>=23*3600000){
+     return send(res,409,{error:'Este CPF já possui uma compra ou reserva de Combo Amigo. O limite é 1 combo por CPF. Para recuperar seu pedido, fale com a organização.'});
+    }
+   }
+  }
   const upstream=await fetch(BASE,{method:'POST',headers:{Authorization:`Bearer ${process.env.BRAVOPAY_API_KEY}`,'Content-Type':'application/json','Idempotency-Key':ref},body:JSON.stringify(payload),signal:AbortSignal.timeout(15000)});
   const data=await upstream.json().catch(()=>({}));
   if(upstream.status===429){const retry=Math.min(180,Math.max(5,Number(upstream.headers.get('Retry-After'))||60));return send(res,429,{error:'Pagamento temporariamente ocupado. Aguarde e tente novamente.',retry_after:retry},{'Retry-After':String(retry)});}

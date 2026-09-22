@@ -100,7 +100,7 @@
     summaryTotal.textContent = brl(total / 100);
 
     qtyMinus.disabled = state.quantity <= 1 || state.activePayment || state.processingPayment;
-    qtyPlus.disabled = state.quantity >= 5 || state.activePayment || state.processingPayment;
+    qtyPlus.disabled = state.quantity >= (state.ticket === "combo" ? 1 : 5) || state.activePayment || state.processingPayment;
     ticketButtons.forEach(button => { button.disabled = state.activePayment || state.processingPayment; });
 
     generatePix.disabled = state.activePayment || state.processingPayment;
@@ -381,7 +381,7 @@
   });
 
   qtyPlus.addEventListener("click", () => {
-    state.quantity = Math.min(5, state.quantity + 1);
+    state.quantity = Math.min(state.ticket === "combo" ? 1 : 5, state.quantity + 1);
     updateSummary();
   });
 
