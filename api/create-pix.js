@@ -19,8 +19,8 @@ module.exports=async function handler(req,res){
  const digest=crypto.createHmac('sha256',process.env.ORDER_SIGNING_SECRET).update(fingerprint).digest('hex').slice(0,32);
  const ref=`hp10_${ticket}_${digest}`;
  const utm={};for(const key of ['source','medium','campaign','content','term','fbclid','ttclid','gclid'])utm[key]=text(b.utm?.[key],180);
- const payload={amount_cents:expected,method:'pix',customer:{name,email,cpf,phone},description:`Halloween Party 1.0 - ${TICKETS[ticket].label} - ${quantity} ingresso(s) + taxa de serviço`,external_reference:ref,metadata:{event:'Halloween Party 1.0',ticket,quantity:String(quantity),ticket_subtotal_cents:String(TICKETS[ticket].cents*quantity),service_fee_cents:String(FEE*quantity)},expires_in:1800,utm};
- const product=ticket==='mulher'?process.env.BRAVOPAY_PRODUCT_ID_MULHER:process.env.BRAVOPAY_PRODUCT_ID_HOMEM;
+ const payload={amount_cents:expected,method:'pix',customer:{name,email,cpf,phone},description:`Halloween Party 1.0 - ${TICKETS[ticket].label} - ${quantity*TICKETS[ticket].admissions} ingresso(s) + taxa de serviço`,external_reference:ref,metadata:{event:'Halloween Party 1.0',ticket,quantity:String(quantity),ticket_subtotal_cents:String(TICKETS[ticket].cents*quantity),service_fee_cents:String(FEE*quantity*TICKETS[ticket].admissions)},expires_in:1800,utm};
+ const product=process.env[{mulher:'BRAVOPAY_PRODUCT_ID_MULHER',homem:'BRAVOPAY_PRODUCT_ID_HOMEM',combo:'BRAVOPAY_PRODUCT_ID_COMBO'}[ticket]];
  if(product)payload.product_id=product;
  try{
   const quota=await redis.limit('create',30);
@@ -61,6 +61,6 @@ module.exports=async function handler(req,res){
   }
   const token=sign({v:1,id:txId,ref,ticket,quantity,amount:expected,name,expires:Date.now()+7*86400000});
   let qr=null;try{qr=await QRCode.toDataURL(pix,{width:440,margin:1,errorCorrectionLevel:'M'});}catch{/* O código copia e cola continua disponível. */}
-  return send(res,200,{token,amount_cents:expected,subtotal_cents:TICKETS[ticket].cents*quantity,service_fee_cents:FEE*quantity,copy_paste:pix,expires_at:data.pix.expires_at||null,qr_data_url:qr});
+  return send(res,200,{token,amount_cents:expected,subtotal_cents:TICKETS[ticket].cents*quantity,service_fee_cents:FEE*quantity*TICKETS[ticket].admissions,copy_paste:pix,expires_at:data.pix.expires_at||null,qr_data_url:qr});
  }catch{return send(res,502,{error:'Não foi possível conectar ao pagamento. Repita a tentativa sem alterar os dados.'});}
 };

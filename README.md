@@ -56,3 +56,7 @@ Ao atualizar a página durante um PIX pendente, o checkout agora restaura visual
 - Erros técnicos mostram apenas um código de motivo nos logs de `/api/create-pix`, sem chave, nome, CPF, código PIX ou outros dados privados.
 - O webhook, o status `PAID` e a tela de obrigado permanecem separados da simples criação da cobrança.
 - **Ainda é necessário teste real após deploy**: PIX gerado e visível, pagamento de teste, confirmação `PAID`, obrigado e WhatsApp.
+
+## Combo Amigo
+
+Combo unissex com 2 ingressos por R$ 80,00, mais R$ 4,49 de taxa por ingresso (R$ 88,98 por combo). No checkout, a quantidade representa combos (1 a 5); a confirmação e o WhatsApp mostram o total de ingressos. `BRAVOPAY_PRODUCT_ID_COMBO` é opcional para vincular um produto dedicado.

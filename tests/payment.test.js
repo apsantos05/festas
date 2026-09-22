@@ -53,11 +53,45 @@ const customer={name:'Teste Comprador',email:'comprador@example.com',cpf:'529982
 async function call(handler,body){const response=res();await handler({method:'POST',body},response);return response;}
 let created;
 test('cálculos corretos da taxa por ingresso',()=>{assert.equal(amount('mulher',1),4449);assert.equal(amount('homem',1),6449);assert.equal(amount('mulher',2),8898);assert.equal(amount('homem',2),12898);assert.equal(amount('mulher',0),null);assert.equal(amount('homem',6),null);});
+test('combo cobra por par e confirma dois ingressos por unidade via webhook',async()=>{
+ assert.equal(amount('combo',1),8898);
+ assert.equal(amount('combo',2),17796);
+ assert.equal(amount('combo',5),44490);
+ assert.equal(amount('combo',0),null);
+ assert.equal(amount('combo',1.5),null);
+ assert.equal(amount('combo',6),null);
+ const data={ticket:'combo',quantity:2,customer,request_id:'c1234567-1234-4234-8234-123456789012'};
+ const a=await call(create,data),b=await call(create,data);
+ assert.equal(a.statusCode,200);
+ assert.equal(a.body.amount_cents,17796);
+ assert.equal(a.body.subtotal_cents,16000);
+ assert.equal(a.body.service_fee_cents,1796);
+ const order=verify(a.body.token);
+ assert.equal(order.ref,verify(b.body.token).ref);
+ assert.equal(verify(sign({...order,amount:8000})),null);
+ const tx=txMap.get(order.ref);
+ assert.equal(tx.metadata.service_fee_cents,'1796');
+ assert.equal((await call(status,{token:a.body.token})).body.paid,false);
+ const event={id:'evt_testcombo',created:Math.floor(Date.now()/1000),type:'transaction.paid',data:{...tx,status:'PAID'}};
+ const raw=Buffer.from(JSON.stringify(event));
+ const ts=Math.floor(Date.now()/1000);
+ const sig=crypto.createHmac('sha256',process.env.BRAVOPAY_WEBHOOK_SECRET).update(`${ts}.${raw.toString('utf8')}`).digest('hex');
+ const response=res();
+ await webhook({method:'POST',rawBody:raw,headers:{'bravopay-signature':`t=${ts},v1=${sig}`}},response);
+ assert.equal(response.statusCode,200);
+ const paid=await call(status,{token:a.body.token});
+ assert.equal(paid.body.paid,true);
+ assert.equal(paid.body.order.quantity,4);
+ assert.equal(paid.body.order.ticket,'Combo Amigo · Unissex');
+ assert.equal(paid.body.order.amount_cents,17796);
+});
+
 test('gera PIX uma vez e conserva referência/idempotência nos retries',async()=>{
+ const previousCount=txMap.size;
  const data={ticket:'mulher',quantity:1,customer,request_id:'d1234567-1234-4234-8234-123456789012'};
  const a=await call(create,data),b=await call(create,data);
  assert.equal(a.statusCode,200);assert.equal(b.statusCode,200);assert.equal(a.body.amount_cents,4449);assert.equal(a.body.service_fee_cents,449);assert.equal(a.body.copy_paste,copyPaste);assert.equal(verify(a.body.token).ref,verify(b.body.token).ref);created=a.body;
- assert.equal(txMap.size,1);
+ assert.equal(txMap.size,previousCount+1);
 });
 
 test('resposta de criacao sem campos opcionais exibe PIX e preserva valor',async()=>{

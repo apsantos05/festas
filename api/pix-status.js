@@ -21,7 +21,7 @@ module.exports=async function handler(req,res){
   }
   if(!tx)return send(res,409,{error:'Ainda não foi possível identificar a cobrança. Tente novamente ou fale com a organização.'});
   const status=String(tx.status||'').toUpperCase();const paid=status==='PAID';
-  return send(res,200,{status,paid,poll_after:redis.configured()?30:180,paid_at:paid?tx.paid_at||null:null,...(paid?{order:{name:order.name,ticket:TICKETS[order.ticket].label,quantity:order.quantity,amount_cents:order.amount,reference:order.ref,event:'Halloween Party 1.0',date:'31/10/2026'}}:{})});
+  return send(res,200,{status,paid,poll_after:redis.configured()?30:180,paid_at:paid?tx.paid_at||null:null,...(paid?{order:{name:order.name,ticket:TICKETS[order.ticket].label,quantity:order.quantity*TICKETS[order.ticket].admissions,amount_cents:order.amount,reference:order.ref,event:'Halloween Party 1.0',date:'31/10/2026'}}:{})});
  }catch(error){
   if(error?.rateLimited){const retry=error.retryAfter||60;return send(res,429,{error:'Estamos confirmando os pagamentos. Aguarde alguns instantes.',retry_after:retry},{'Retry-After':String(retry)});}
   return send(res,502,{error:'Não foi possível consultar agora. Tente novamente.'});

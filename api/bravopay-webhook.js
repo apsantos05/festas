@@ -24,7 +24,7 @@ module.exports=async function handler(req,res){
  let event;try{event=JSON.parse(raw.toString('utf8'));}catch{return send(res,400,{error:'JSON inválido.'});}
  if(!/^evt_[a-zA-Z0-9_-]+$/.test(event.id||'')||typeof event.type!=='string')return send(res,422,{error:'Evento inválido.'});
  const tx=event.data||{};
- if(event.type.startsWith('transaction.')&&/^tx_[a-zA-Z0-9_-]+$/.test(tx.id||'')&&/^hp10_(mulher|homem)_[a-f0-9]{32}$/.test(tx.external_reference||'')){
+ if(event.type.startsWith('transaction.')&&/^tx_[a-zA-Z0-9_-]+$/.test(tx.id||'')&&/^hp10_(mulher|homem|combo)_[a-f0-9]{32}$/.test(tx.external_reference||'')){
   const types={'transaction.paid':'PAID','transaction.expired':'EXPIRED','transaction.failed':'FAILED','transaction.refunded':'REFUNDED','transaction.chargeback':'CHARGEBACK'};
   const status=types[event.type];
   if(status){

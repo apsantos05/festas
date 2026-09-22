@@ -5,6 +5,8 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
+  const ticketOptions = {mulher:{label:'Mulher',price:40,admissions:1},homem:{label:'Homem',price:60,admissions:1},combo:{label:'Combo Amigo · Unissex',price:80,admissions:2}};
+
   const state = {
     ticket: "mulher",
     price: 40,
@@ -83,14 +85,16 @@
 
   function updateSummary() {
     const feePerTicket = Number(config.serviceFeePerTicket || 4.49);
+    const admissions = state.quantity * ticketOptions[state.ticket].admissions;
     const subtotal = Math.round(state.price * 100) * state.quantity;
-    const serviceFee = Math.round(feePerTicket * 100) * state.quantity;
+    const serviceFee = Math.round(feePerTicket * 100) * admissions;
     const total = subtotal + serviceFee;
 
     qtyValue.textContent = String(state.quantity);
     totalValue.textContent = brl(total / 100);
-    summaryTicket.textContent = `1º Lote · ${state.ticket === "mulher" ? "Mulher" : "Homem"}`;
-    summaryQty.textContent = String(state.quantity);
+    summaryTicket.textContent = `1º Lote · ${ticketOptions[state.ticket].label}`;
+    summaryQty.textContent = state.ticket === "combo" ? `${state.quantity} combo(s) · ${admissions} ingressos` : String(admissions);
+    $("#quantityLabel").textContent = state.ticket === "combo" ? "QUANTIDADE DE COMBOS" : "QUANTIDADE";
     summarySubtotal.textContent = brl(subtotal / 100);
     summaryFee.textContent = `${brl(serviceFee / 100)} (${brl(feePerTicket)} por ingresso)`;
     summaryTotal.textContent = brl(total / 100);
@@ -419,10 +423,10 @@
         if(data.copy_paste){
           // A seleção exibida após o reload deve refletir a cobrança original.
           // A aprovação permanece exclusiva do servidor; dados locais são somente visuais.
-          if ((data.ticket === "mulher" || data.ticket === "homem") && Number.isInteger(data.quantity) && data.quantity >= 1 && data.quantity <= 5) {
+          if (Object.hasOwn(ticketOptions, data.ticket) && Number.isInteger(data.quantity) && data.quantity >= 1 && data.quantity <= 5) {
             state.ticket = data.ticket;
             state.quantity = data.quantity;
-            state.price = data.ticket === "mulher" ? 40 : 60;
+            state.price = ticketOptions[data.ticket].price;
             ticketButtons.forEach(button => {
               const selected = button.dataset.ticket === data.ticket;
               button.classList.toggle("is-selected", selected);
