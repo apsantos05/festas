@@ -8,6 +8,7 @@
   const ticketOptions = {mulher:{label:'Mulher',price:40,admissions:1},homem:{label:'Homem',price:60,admissions:1},jovem:{label:'+16 anos · Open bar sem álcool (refrigerante, água e energético)',price:25,admissions:1},combo:{label:'Combo Amigo · Unissex',price:80,admissions:2}};
 
   const state = {
+    coupon: "",
     ticket: "mulher",
     price: 40,
     quantity: 1,
@@ -83,12 +84,20 @@
     };
   }
 
+  const validCoupons = ["DOLCE10", "MARIF10", "BRUNOJ10", "PROMO10"];
+
   function updateSummary() {
     const feePerTicket = Number(config.serviceFeePerTicket || 4.49);
     const admissions = state.quantity * ticketOptions[state.ticket].admissions;
     const subtotal = Math.round(state.price * 100) * state.quantity;
     const serviceFee = Math.round(feePerTicket * 100) * admissions;
-    const total = subtotal + serviceFee;
+    const discount = state.coupon ? Math.round(subtotal * 10 / 100) : 0;
+    const total = subtotal - discount + serviceFee;
+    $("#discountRow").hidden = !state.coupon;
+    $("#discountLabel").textContent = `Desconto ${state.coupon} (10%)`;
+    $("#summaryDiscount").textContent = `− ${brl(discount / 100)}`;
+    $("#removeCoupon").hidden = !state.coupon;
+    ["#couponCode", "#applyCoupon", "#removeCoupon"].forEach(id => { $(id).disabled = state.activePayment || state.processingPayment; });
 
     qtyValue.textContent = String(state.quantity);
     totalValue.textContent = brl(total / 100);
@@ -143,7 +152,7 @@
   }
 
   function requestFor(data) {
-    const fingerprint = JSON.stringify({ticket:state.ticket,quantity:state.quantity,customer:data});
+    const fingerprint = JSON.stringify({ticket:state.ticket,quantity:state.quantity,...(state.coupon?{coupon:state.coupon}:{}),customer:data});
     if (state.requestFingerprint !== fingerprint || !state.requestId) {
       state.requestFingerprint = fingerprint;
       state.requestId = crypto.randomUUID();
@@ -165,6 +174,11 @@
       showToast("Não foi possível preservar seu pagamento neste navegador. Habilite os dados do site ou use outra aba normal.");
       return;
     }
+    if ($("#couponCode").value.trim().toUpperCase() !== state.coupon) {
+      $("#couponStatus").textContent = "Clique em APLICAR para validar o cupom antes de gerar o PIX.";
+      $("#applyCoupon").focus();
+      return;
+    }
     const validation = validateForm();
 
     if (!validation.ok) {
@@ -181,6 +195,7 @@
         body: JSON.stringify({
           ticket: state.ticket,
           quantity: state.quantity,
+          coupon: state.coupon,
           customer: validation.data,
           utm: captureUtm(),
           request_id: requestFor(validation.data)
@@ -203,7 +218,7 @@
       state.expiredLocal = false;
       try {
         sessionStorage.setItem("hp10_order_token", payload.token);
-        sessionStorage.setItem("hp10_pix_display", JSON.stringify({copy_paste:payload.copy_paste,qr_data_url:payload.qr_data_url,expires_at:payload.expires_at,amount_cents:payload.amount_cents,ticket:state.ticket,quantity:state.quantity}));
+        sessionStorage.setItem("hp10_pix_display", JSON.stringify({copy_paste:payload.copy_paste,qr_data_url:payload.qr_data_url,expires_at:payload.expires_at,amount_cents:payload.amount_cents,ticket:state.ticket,quantity:state.quantity,coupon:payload.coupon||""}));
       } catch {
         statusHint.textContent = "Mantenha esta aba aberta até a confirmação. O navegador não permitiu preservar a cobrança para retorno.";
       }
@@ -385,6 +400,32 @@
     updateSummary();
   });
 
+  $("#applyCoupon").addEventListener("click", () => {
+    if (state.activePayment || state.processingPayment) return;
+    const code = $("#couponCode").value.trim().toUpperCase();
+    if (!validCoupons.includes(code)) {
+      state.coupon = "";
+      $("#couponStatus").textContent = "Cupom inválido. Confira o código ou limpe o campo para continuar sem desconto.";
+      $("#couponCode").setAttribute("aria-invalid", "true");
+    } else {
+      state.coupon = code;
+      $("#couponCode").value = code;
+      $("#couponCode").removeAttribute("aria-invalid");
+      $("#couponStatus").textContent = `Cupom ${code} aplicado: 10% de desconto nos ingressos. Taxa de serviço sem desconto.`;
+    }
+    updateSummary();
+  });
+  $("#removeCoupon").addEventListener("click", () => {
+    if (state.activePayment || state.processingPayment) return;
+    state.coupon = "";
+    $("#couponCode").value = "";
+    $("#couponCode").removeAttribute("aria-invalid");
+    $("#couponStatus").textContent = "Cupom removido.";
+    updateSummary();
+  });
+  $("#couponCode").addEventListener("keydown", event => {
+    if (event.key === "Enter") { event.preventDefault(); $("#applyCoupon").click(); }
+  });
   generatePix.addEventListener("click", generatePayment);
   copyPix.addEventListener("click", copyPixCode);
   copyPixLarge.addEventListener("click", copyPixCode);
@@ -424,6 +465,9 @@
           // A seleção exibida após o reload deve refletir a cobrança original.
           // A aprovação permanece exclusiva do servidor; dados locais são somente visuais.
           if (Object.hasOwn(ticketOptions, data.ticket) && Number.isInteger(data.quantity) && data.quantity >= 1 && data.quantity <= 5) {
+            state.coupon = validCoupons.includes(data.coupon) ? data.coupon : "";
+            $("#couponCode").value = state.coupon;
+            if (state.coupon) $("#couponStatus").textContent = `Cupom ${state.coupon} aplicado ao PIX recuperado.`;
             state.ticket = data.ticket;
             state.quantity = data.quantity;
             state.price = ticketOptions[data.ticket].price;

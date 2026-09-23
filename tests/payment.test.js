@@ -151,6 +151,50 @@ test('ingresso +16 cobra 25 reais mais taxa e mantém identificação sem álcoo
  assert.match(paid.body.order.ticket,/sem álcool.*refrigerante, água e energético/);
 });
 
+test('cupons descontam 10% apenas dos ingressos e rejeitam códigos inválidos',async()=>{
+ for(const code of ['DOLCE10','MARIF10','BRUNOJ10','PROMO10']){
+  assert.equal(amount('mulher',1,code),4049);
+  assert.equal(amount('homem',1,code),5849);
+  assert.equal(amount('jovem',1,code),2699);
+  assert.equal(amount('combo',1,code),8098);
+  assert.equal(amount('jovem',5,code),13495);
+ }
+ assert.equal(amount('mulher',1,' dolce10 '),4049);
+ assert.equal(amount('mulher',1,'INVALIDO'),null);
+ const data={ticket:'mulher',quantity:2,customer,coupon:' dolce10 ',request_id:'a1234567-1234-4234-8234-123456789088'};
+ const before=providerCalls;
+ for(const coupon of ['INVALIDO',{},['DOLCE10'],'DOLCE10 MARIF10']){
+  assert.equal((await call(create,{...data,coupon})).statusCode,422);
+ }
+ assert.equal(providerCalls,before);
+ const a=await call(create,data),retry=await call(create,{...data,coupon:'DOLCE10'});
+ assert.equal(a.statusCode,200);
+ assert.equal(a.body.amount_cents,8098);
+ assert.equal(a.body.subtotal_cents,8000);
+ assert.equal(a.body.discount_cents,800);
+ assert.equal(a.body.service_fee_cents,898);
+ assert.equal(a.body.coupon,'DOLCE10');
+ const order=verify(a.body.token);
+ assert.equal(order.coupon,'DOLCE10');
+ assert.equal(order.ref,verify(retry.body.token).ref);
+ assert.equal(verify(sign({...order,coupon:''})),null);
+ const changed=await call(create,{...data,coupon:'MARIF10'});
+ assert.notEqual(verify(changed.body.token).ref,order.ref);
+ const tx=txMap.get(order.ref);
+ assert.equal(tx.metadata.discount_cents,'800');
+ assert.equal(tx.metadata.coupon,'DOLCE10');
+ const event={id:'evt_testcoupon',created:Math.floor(Date.now()/1000),type:'transaction.paid',data:{...tx,status:'PAID'}};
+ const raw=Buffer.from(JSON.stringify(event));const ts=Math.floor(Date.now()/1000);
+ const sig=crypto.createHmac('sha256',process.env.BRAVOPAY_WEBHOOK_SECRET).update(`${ts}.${raw.toString('utf8')}`).digest('hex');
+ const response=res();await webhook({method:'POST',rawBody:raw,headers:{'bravopay-signature':`t=${ts},v1=${sig}`}},response);
+ assert.equal(response.statusCode,200);
+ const paid=await call(status,{token:a.body.token});
+ assert.equal(paid.body.paid,true);
+ assert.equal(paid.body.order.amount_cents,8098);
+ const reserved=await call(create,{ticket:'combo',quantity:1,customer,coupon:'PROMO10',request_id:'a1234567-1234-4234-8234-123456789087'});
+ assert.equal(reserved.statusCode,409);
+});
+
 test('gera PIX uma vez e conserva referência/idempotência nos retries',async()=>{
  const previousCount=txMap.size;
  const data={ticket:'mulher',quantity:1,customer,request_id:'d1234567-1234-4234-8234-123456789012'};

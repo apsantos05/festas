@@ -70,3 +70,7 @@ Uma reserva pendente também ocupa o limite. A mesma tentativa pode ser repetida
 ## Ingresso +16 anos
 
 Para 16 e 17 anos: R$ 25,00 + R$ 4,49 de taxa por ingresso. Open bar apenas de refrigerante, água e energético, sem bebidas alcoólicas. O tipo e a descrição são mantidos na cobrança, confirmação e mensagem de entrega. Produto opcional: `BRAVOPAY_PRODUCT_ID_JOVEM`.
+
+## Cupons
+
+DOLCE10, MARIF10, BRUNOJ10 e PROMO10 dão 10% de desconto no subtotal de qualquer categoria. Taxas não recebem desconto. Um cupom por compra; códigos normalizados e validados no servidor. Cupom integra a referência idempotente, os metadados e o token assinado. PIX gerado trava a edição do cupom e recupera o desconto ao recarregar. Pedidos antigos sem cupom continuam válidos.

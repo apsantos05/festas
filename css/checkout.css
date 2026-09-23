@@ -287,3 +287,14 @@ html{overflow-x:clip;-webkit-text-size-adjust:100%}body{min-width:0}input,textar
 .ticket-card[data-ticket="combo"] strong{font-size:clamp(25px,7vw,34px)}
 
 .ticket-card[data-ticket="jovem"]{grid-column:1 / -1}
+
+.coupon-card{margin-top:26px;padding:18px;border:1px solid var(--line);background:var(--panel)}
+.coupon-card h2{margin:0 0 14px;font:800 25px 'Barlow Condensed',Impact,sans-serif}
+.coupon-card label{display:block;font-size:13px;margin-bottom:8px}
+.coupon-controls{display:flex;flex-wrap:wrap;gap:8px}
+.coupon-controls input{min-width:0;flex:1 1 160px;padding:12px;background:var(--bg);color:var(--text);border:1px solid var(--line2);text-transform:uppercase}
+.coupon-controls button{min-height:46px;padding:0 12px;border:1px solid var(--orange);background:var(--orange);color:#180c06;font-weight:700}
+.coupon-controls button:disabled,.coupon-controls input:disabled{opacity:.6;cursor:default}
+.coupon-card p{font-size:12px;line-height:1.6;color:var(--muted);margin-bottom:0}
+#discountRow{color:var(--success)}
+#discountRow[hidden]{display:none}

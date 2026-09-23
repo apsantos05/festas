@@ -152,6 +152,17 @@
       </form>
     </section>
 
+    <section class="coupon-card" aria-labelledby="coupon-title">
+      <h2 id="coupon-title">TEM UM CUPOM?</h2>
+      <label for="couponCode">Cupom de desconto</label>
+      <div class="coupon-controls">
+        <input id="couponCode" type="text" maxlength="30" placeholder="Digite seu cupom" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="couponStatus">
+        <button id="applyCoupon" type="button">APLICAR</button>
+        <button id="removeCoupon" type="button" hidden>REMOVER</button>
+      </div>
+      <p id="couponStatus" role="status" aria-live="polite">10% de desconto nos ingressos. A taxa de serviço permanece igual. Um cupom por compra.</p>
+    </section>
+
     <section class="summary-card">
       <div class="summary-row">
         <span>Ingresso</span>
@@ -166,6 +177,11 @@
       <div class="summary-row">
         <span>Subtotal dos ingressos</span>
         <strong id="summarySubtotal">R$ 40,00</strong>
+      </div>
+
+      <div class="summary-row" id="discountRow" hidden>
+        <span id="discountLabel">Desconto (10%)</span>
+        <strong id="summaryDiscount"></strong>
       </div>
 
       <div class="summary-row">

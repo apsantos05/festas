@@ -1,7 +1,7 @@
 'use strict';
 const crypto=require('node:crypto');
 const QRCode=require('qrcode');
-const {BASE,FEE,TICKETS,amount,send,sign}=require('../lib/payment-shared');
+const {BASE,FEE,TICKETS,amount,send,sign,normalizeCoupon}=require('../lib/payment-shared');
 const redis=require('../lib/redis');
 function digits(v){return String(v||'').replace(/\D/g,'');}
 function text(v,max=120){return String(v||'').trim().slice(0,max);}
@@ -9,18 +9,21 @@ function cpfValid(cpf){if(!/^\d{11}$/.test(cpf)||/^(\d)\1{10}$/.test(cpf))return
 module.exports=async function handler(req,res){
  if(req.method!=='POST'){res.setHeader('Allow','POST');return send(res,405,{error:'Método não permitido.'});}
  if(!process.env.BRAVOPAY_API_KEY||!process.env.ORDER_SIGNING_SECRET||process.env.ORDER_SIGNING_SECRET.length<32)return send(res,503,{error:'Pagamento temporariamente indisponível.'});
- const b=req.body||{};const ticket=String(b.ticket||'');const quantity=Number(b.quantity);const expected=amount(ticket,quantity);
+ const b=req.body||{};const ticket=String(b.ticket||'');const quantity=Number(b.quantity);const coupon=normalizeCoupon(b.coupon);
+ if(coupon===null)return send(res,422,{error:'Cupom inválido. Confira o código ou remova o cupom.'});
+ const expected=amount(ticket,quantity,coupon);
  if(ticket==='combo'&&quantity!==1)return send(res,422,{error:'O Combo Amigo é limitado a 1 combo (2 ingressos) por CPF.'});
  if(expected===null)return send(res,422,{error:'Selecione um ingresso e uma quantidade válida (1 a 5).'});
  const name=text(b.customer?.name);const email=text(b.customer?.email,180).toLowerCase();const cpf=digits(b.customer?.cpf);const phone=digits(b.customer?.phone);
  if(name.length<3||!/^\S+@\S+\.\S+$/.test(email)||!cpfValid(cpf)||phone.length<10||phone.length>13)return send(res,422,{error:'Revise nome, e-mail, CPF e WhatsApp.'});
  const requestId=String(b.request_id||'');if(!/^[a-f0-9-]{36}$/i.test(requestId))return send(res,422,{error:'Atualize a página e tente novamente.'});
  // Referência estável por tentativa + conteúdo; retry do mesmo envio reutiliza a chave da adquirente.
- const fingerprint=JSON.stringify({requestId,ticket,quantity,name,email,cpf,phone});
+ const fingerprint=JSON.stringify({requestId,ticket,quantity,name,email,cpf,phone,...(coupon?{coupon}:{})});
  const digest=crypto.createHmac('sha256',process.env.ORDER_SIGNING_SECRET).update(fingerprint).digest('hex').slice(0,32);
  const ref=`hp10_${ticket}_${digest}`;
  const utm={};for(const key of ['source','medium','campaign','content','term','fbclid','ttclid','gclid'])utm[key]=text(b.utm?.[key],180);
- const payload={amount_cents:expected,method:'pix',customer:{name,email,cpf,phone},description:`Halloween Party 1.0 - ${TICKETS[ticket].label} - ${quantity*TICKETS[ticket].admissions} ingresso(s) + taxa de serviço`,external_reference:ref,metadata:{event:'Halloween Party 1.0',ticket,quantity:String(quantity),ticket_subtotal_cents:String(TICKETS[ticket].cents*quantity),service_fee_cents:String(FEE*quantity*TICKETS[ticket].admissions)},expires_in:1800,utm};
+ const discount=coupon?Math.round(TICKETS[ticket].cents*quantity*10/100):0;
+ const payload={amount_cents:expected,method:'pix',customer:{name,email,cpf,phone},description:`Halloween Party 1.0 - ${TICKETS[ticket].label} - ${quantity*TICKETS[ticket].admissions} ingresso(s) + taxa de serviço`,external_reference:ref,metadata:{event:'Halloween Party 1.0',ticket,coupon,discount_cents:String(discount),quantity:String(quantity),ticket_subtotal_cents:String(TICKETS[ticket].cents*quantity),service_fee_cents:String(FEE*quantity*TICKETS[ticket].admissions)},expires_in:1800,utm};
  const product=process.env[{mulher:'BRAVOPAY_PRODUCT_ID_MULHER',homem:'BRAVOPAY_PRODUCT_ID_HOMEM',combo:'BRAVOPAY_PRODUCT_ID_COMBO',jovem:'BRAVOPAY_PRODUCT_ID_JOVEM'}[ticket]];
  if(product)payload.product_id=product;
  try{
@@ -76,8 +79,8 @@ module.exports=async function handler(req,res){
    console.error('[create-pix] rejected provider response', {reason:rejectReason});
    return send(res,502,{error:'Não foi possível validar a cobrança PIX. Não efetue pagamento.'});
   }
-  const token=sign({v:1,id:txId,ref,ticket,quantity,amount:expected,name,expires:Date.now()+7*86400000});
+  const token=sign({v:1,id:txId,ref,ticket,quantity,...(coupon?{coupon}:{}),amount:expected,name,expires:Date.now()+7*86400000});
   let qr=null;try{qr=await QRCode.toDataURL(pix,{width:440,margin:1,errorCorrectionLevel:'M'});}catch{/* O código copia e cola continua disponível. */}
-  return send(res,200,{token,amount_cents:expected,subtotal_cents:TICKETS[ticket].cents*quantity,service_fee_cents:FEE*quantity*TICKETS[ticket].admissions,copy_paste:pix,expires_at:data.pix.expires_at||null,qr_data_url:qr});
+  return send(res,200,{token,coupon,discount_cents:discount,amount_cents:expected,subtotal_cents:TICKETS[ticket].cents*quantity,service_fee_cents:FEE*quantity*TICKETS[ticket].admissions,copy_paste:pix,expires_at:data.pix.expires_at||null,qr_data_url:qr});
  }catch{return send(res,502,{error:'Não foi possível conectar ao pagamento. Repita a tentativa sem alterar os dados.'});}
 };
