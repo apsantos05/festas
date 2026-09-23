@@ -283,8 +283,6 @@ html{overflow-x:clip;-webkit-text-size-adjust:100%}body{min-width:0}input,textar
 
 .brand i{display:block;margin:6px 0 0;max-width:190px;line-height:1.4;letter-spacing:.6px}
 
-.ticket-card[data-ticket="combo"]{grid-column:1 / -1}
-.ticket-card[data-ticket="combo"] strong{font-size:clamp(25px,7vw,34px)}
 
 .ticket-card[data-ticket="jovem"]{grid-column:1 / -1}
 

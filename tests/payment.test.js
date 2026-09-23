@@ -53,68 +53,22 @@ const customer={name:'Teste Comprador',email:'comprador@example.com',cpf:'529982
 async function call(handler,body){const response=res();await handler({method:'POST',body},response);return response;}
 let created;
 test('cálculos corretos da taxa por ingresso',()=>{assert.equal(amount('mulher',1),4449);assert.equal(amount('homem',1),6449);assert.equal(amount('mulher',2),8898);assert.equal(amount('homem',2),12898);assert.equal(amount('mulher',0),null);assert.equal(amount('homem',6),null);});
-test('combo cobra por par e confirma dois ingressos por unidade via webhook',async()=>{
- assert.equal(amount('combo',1),8898);
- assert.equal(amount('combo',2),17796);
- assert.equal(amount('combo',5),44490);
- assert.equal(amount('combo',0),null);
- assert.equal(amount('combo',1.5),null);
- assert.equal(amount('combo',6),null);
- const data={ticket:'combo',quantity:1,customer,request_id:'c1234567-1234-4234-8234-123456789012'};
- const a=await call(create,data),b=await call(create,data);
- assert.equal(a.statusCode,200);
- assert.equal(a.body.amount_cents,8898);
- assert.equal(a.body.subtotal_cents,8000);
- assert.equal(a.body.service_fee_cents,898);
- const order=verify(a.body.token);
- assert.equal(order.ref,verify(b.body.token).ref);
- assert.equal(verify(sign({...order,amount:8000})),null);
- const tx=txMap.get(order.ref);
- assert.equal(tx.metadata.service_fee_cents,'898');
- assert.equal((await call(status,{token:a.body.token})).body.paid,false);
- const event={id:'evt_testcombo',created:Math.floor(Date.now()/1000),type:'transaction.paid',data:{...tx,status:'PAID'}};
- const raw=Buffer.from(JSON.stringify(event));
- const ts=Math.floor(Date.now()/1000);
- const sig=crypto.createHmac('sha256',process.env.BRAVOPAY_WEBHOOK_SECRET).update(`${ts}.${raw.toString('utf8')}`).digest('hex');
- const response=res();
- await webhook({method:'POST',rawBody:raw,headers:{'bravopay-signature':`t=${ts},v1=${sig}`}},response);
- assert.equal(response.statusCode,200);
- const paid=await call(status,{token:a.body.token});
- assert.equal(paid.body.paid,true);
- assert.equal(paid.body.order.quantity,2);
- assert.equal(paid.body.order.ticket,'Combo Amigo · Unissex');
- assert.equal(paid.body.order.amount_cents,8898);
-});
-
-test('combo bloqueia quantidade adulterada, CPF repetido e pedidos simultâneos',async()=>{
+test('combo retirado rejeita novas cobranças e preserva confirmação de pedidos antigos',async()=>{
  const before=providerCalls;
- const data={ticket:'combo',quantity:1,customer,request_id:'e1234567-1234-4234-8234-123456789012'};
- assert.equal((await call(create,{...data,quantity:2})).statusCode,422);
- assert.equal((await call(create,{...data,customer:{...customer,cpf:'529.982.247-25',email:'outro@example.com'}})).statusCode,409);
+ for(const quantity of [1,2]){
+  const result=await call(create,{ticket:'combo',quantity,customer,request_id:'c1234567-1234-4234-8234-123456789012'});
+  assert.equal(result.statusCode,422);
+  assert.match(result.body.error,/não está mais disponível/);
+ }
  assert.equal(providerCalls,before);
- const race={...data,customer:{...customer,cpf:'11144477735'}};
- const results=await Promise.all([call(create,race),call(create,{...race,request_id:'f1234567-1234-4234-8234-123456789012'})]);
- assert.deepEqual(results.map(r=>r.statusCode).sort(),[200,409]);
- const entry=[...redisMap.entries()].find(([k,v])=>k.startsWith('hp10:combo-cpf:')&&JSON.parse(v).ref===verify(results.find(r=>r.statusCode===200).body.token).ref);
- const value=JSON.parse(entry[1]);
- assert.ok(!entry[0].includes(race.customer.cpf));
- redisMap.set(entry[0],JSON.stringify({...value,created:Date.now()-24*3600000}));
- assert.equal((await call(create,race)).statusCode,409);
-});
-
-test('combo falha fechado sem Redis ou com Redis indisponível',async()=>{
- const url=process.env.UPSTASH_REDIS_REST_URL;
- const before=providerCalls;
- const data={ticket:'combo',quantity:1,customer,request_id:'b1234567-1234-4234-8234-123456789012'};
- try{
-  delete process.env.UPSTASH_REDIS_REST_URL;
-  assert.equal((await call(create,data)).statusCode,503);
-  process.env.UPSTASH_REDIS_REST_URL=url;
-  const currentFetch=global.fetch;
-  global.fetch=async(u,i)=>{if(String(u).endsWith('/pipeline'))throw Error('Unavailable');return currentFetch(u,i);};
-  try{assert.equal((await call(create,data)).statusCode,502);}finally{global.fetch=currentFetch;}
-  assert.equal(providerCalls,before);
- }finally{process.env.UPSTASH_REDIS_REST_URL=url;}
+ const order={v:1,id:'tx_legacycombo',ref:'hp10_combo_'+'a'.repeat(32),ticket:'combo',quantity:1,amount:8898,name:customer.name,expires:Date.now()+86400000};
+ const token=sign(order);
+ assert.ok(verify(token));
+ txMap.set(order.ref,{id:order.id,external_reference:order.ref,amount_cents:8898,method:'PIX',currency:'BRL',metadata:{ticket:'combo',quantity:'1'},status:'PAID'});
+ const result=await call(status,{token});
+ assert.equal(result.body.paid,true);
+ assert.equal(result.body.order.quantity,2);
+ assert.match(result.body.order.ticket,/Combo Amigo/);
 });
 
 test('ingresso +16 cobra 25 reais mais taxa e mantém identificação sem álcool',async()=>{
@@ -192,7 +146,7 @@ test('cupons descontam 10% apenas dos ingressos e rejeitam códigos inválidos',
  assert.equal(paid.body.paid,true);
  assert.equal(paid.body.order.amount_cents,8098);
  const reserved=await call(create,{ticket:'combo',quantity:1,customer,coupon:'PROMO10',request_id:'a1234567-1234-4234-8234-123456789087'});
- assert.equal(reserved.statusCode,409);
+ assert.equal(reserved.statusCode,422);
 });
 
 test('gera PIX uma vez e conserva referência/idempotência nos retries',async()=>{

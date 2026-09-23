@@ -57,15 +57,9 @@ Ao atualizar a página durante um PIX pendente, o checkout agora restaura visual
 - O webhook, o status `PAID` e a tela de obrigado permanecem separados da simples criação da cobrança.
 - **Ainda é necessário teste real após deploy**: PIX gerado e visível, pagamento de teste, confirmação `PAID`, obrigado e WhatsApp.
 
-## Combo Amigo
+## Combo Amigo retirado
 
-Combo unissex com 2 ingressos por R$ 80,00, mais R$ 4,49 de taxa por ingresso (R$ 88,98 por combo). No checkout, a quantidade representa combos (máximo de 1 por CPF); a confirmação e o WhatsApp mostram o total de ingressos. `BRAVOPAY_PRODUCT_ID_COMBO` é opcional para vincular um produto dedicado.
-
-### Limite do Combo Amigo por CPF
-
-Redis passa a ser obrigatório para gerar PIX do combo; sem configuração ou com falha, a geração é bloqueada. A reserva permanente usa HMAC do CPF normalizado e SET NX atômico antes de chamar o provedor. Mantenha ORDER_SIGNING_SECRET estável e preserve as chaves hp10:combo-cpf (sem expiração/evicção). Pedidos individuais continuam com o comportamento anterior.
-
-Uma reserva pendente também ocupa o limite. A mesma tentativa pode ser repetida por até 23 horas; uma nova tentativa, inclusive em outro navegador, é bloqueada. Em caso de expiração ou erro, a organização deve conciliar a cobrança antes de liberar manualmente a reserva; nunca liberar apenas por timeout local. Compras anteriores à implantação não têm reserva por CPF: conciliar e cadastrar as reservas antes de reabrir a venda caso já existam combos vendidos. Tokens antigos seguem válidos para confirmação.
+Removido da oferta e bloqueado para novas cobranças. A confirmação de pedidos antigos continua disponível.
 
 ## Ingresso +16 anos
 
