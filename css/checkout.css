@@ -285,3 +285,5 @@ html{overflow-x:clip;-webkit-text-size-adjust:100%}body{min-width:0}input,textar
 
 .ticket-card[data-ticket="combo"]{grid-column:1 / -1}
 .ticket-card[data-ticket="combo"] strong{font-size:clamp(25px,7vw,34px)}
+
+.ticket-card[data-ticket="jovem"]{grid-column:1 / -1}

@@ -66,3 +66,7 @@ Combo unissex com 2 ingressos por R$ 80,00, mais R$ 4,49 de taxa por ingresso (R
 Redis passa a ser obrigatório para gerar PIX do combo; sem configuração ou com falha, a geração é bloqueada. A reserva permanente usa HMAC do CPF normalizado e SET NX atômico antes de chamar o provedor. Mantenha ORDER_SIGNING_SECRET estável e preserve as chaves hp10:combo-cpf (sem expiração/evicção). Pedidos individuais continuam com o comportamento anterior.
 
 Uma reserva pendente também ocupa o limite. A mesma tentativa pode ser repetida por até 23 horas; uma nova tentativa, inclusive em outro navegador, é bloqueada. Em caso de expiração ou erro, a organização deve conciliar a cobrança antes de liberar manualmente a reserva; nunca liberar apenas por timeout local. Compras anteriores à implantação não têm reserva por CPF: conciliar e cadastrar as reservas antes de reabrir a venda caso já existam combos vendidos. Tokens antigos seguem válidos para confirmação.
+
+## Ingresso +16 anos
+
+Para 16 e 17 anos: R$ 25,00 + R$ 4,49 de taxa por ingresso. Open bar apenas de refrigerante, água e energético, sem bebidas alcoólicas. O tipo e a descrição são mantidos na cobrança, confirmação e mensagem de entrega. Produto opcional: `BRAVOPAY_PRODUCT_ID_JOVEM`.

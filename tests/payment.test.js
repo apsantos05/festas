@@ -117,6 +117,40 @@ test('combo falha fechado sem Redis ou com Redis indisponível',async()=>{
  }finally{process.env.UPSTASH_REDIS_REST_URL=url;}
 });
 
+test('ingresso +16 cobra 25 reais mais taxa e mantém identificação sem álcool',async()=>{
+ assert.equal(amount('jovem',1),2949);
+ assert.equal(amount('jovem',2),5898);
+ assert.equal(amount('jovem',5),14745);
+ assert.equal(amount('jovem',0),null);
+ assert.equal(amount('jovem',6),null);
+ const data={ticket:'jovem',quantity:2,customer,request_id:'a1234567-1234-4234-8234-123456789099'};
+ const a=await call(create,data),retry=await call(create,data);
+ assert.equal(a.statusCode,200);
+ assert.equal(a.body.amount_cents,5898);
+ assert.equal(a.body.subtotal_cents,5000);
+ assert.equal(a.body.service_fee_cents,898);
+ const order=verify(a.body.token);
+ assert.equal(order.ticket,'jovem');
+ assert.equal(order.ref,verify(retry.body.token).ref);
+ assert.equal(verify(sign({...order,amount:2500})),null);
+ assert.equal((await call(status,{token:a.body.token})).body.paid,false);
+ const tx=txMap.get(order.ref);
+ const event={id:'evt_testjovem',created:Math.floor(Date.now()/1000),type:'transaction.paid',data:{...tx,status:'PAID'}};
+ const raw=Buffer.from(JSON.stringify(event));
+ const ts=Math.floor(Date.now()/1000);
+ const sig=crypto.createHmac('sha256',process.env.BRAVOPAY_WEBHOOK_SECRET).update(`${ts}.${raw.toString('utf8')}`).digest('hex');
+ const response=res();
+ await webhook({method:'POST',rawBody:raw,headers:{'bravopay-signature':`t=${ts},v1=${sig}`}},response);
+ assert.equal(response.statusCode,200);
+ const before=providerCalls;
+ const paid=await call(status,{token:a.body.token});
+ assert.equal(providerCalls,before);
+ assert.equal(paid.body.paid,true);
+ assert.equal(paid.body.order.quantity,2);
+ assert.equal(paid.body.order.amount_cents,5898);
+ assert.match(paid.body.order.ticket,/sem álcool.*refrigerante, água e energético/);
+});
+
 test('gera PIX uma vez e conserva referência/idempotência nos retries',async()=>{
  const previousCount=txMap.size;
  const data={ticket:'mulher',quantity:1,customer,request_id:'d1234567-1234-4234-8234-123456789012'};
