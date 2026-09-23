@@ -9,6 +9,7 @@
 
   const state = {
     coupon: "",
+    discountRate: 25,
     ticket: "mulher",
     price: 40,
     quantity: 1,
@@ -84,17 +85,17 @@
     };
   }
 
-  const validCoupons = ["DOLCE10", "MARIF10", "BRUNOJ10", "PROMO10"];
+  const validCoupons = ["DOLCE25", "MARIF25", "BRUNOJ25", "PROMO25"];
 
   function updateSummary() {
     const feePerTicket = Number(config.serviceFeePerTicket || 4.49);
     const admissions = state.quantity * ticketOptions[state.ticket].admissions;
     const subtotal = Math.round(state.price * 100) * state.quantity;
     const serviceFee = Math.round(feePerTicket * 100) * admissions;
-    const discount = state.coupon ? Math.round(subtotal * 10 / 100) : 0;
+    const discount = state.coupon ? Math.round(subtotal * state.discountRate / 100) : 0;
     const total = subtotal - discount + serviceFee;
     $("#discountRow").hidden = !state.coupon;
-    $("#discountLabel").textContent = `Desconto ${state.coupon} (10%)`;
+    $("#discountLabel").textContent = `Desconto ${state.coupon} (${state.discountRate}%)`;
     $("#summaryDiscount").textContent = `− ${brl(discount / 100)}`;
     $("#removeCoupon").hidden = !state.coupon;
     ["#couponCode", "#applyCoupon", "#removeCoupon"].forEach(id => { $(id).disabled = state.activePayment || state.processingPayment; });
@@ -409,9 +410,10 @@
       $("#couponCode").setAttribute("aria-invalid", "true");
     } else {
       state.coupon = code;
+      state.discountRate = 25;
       $("#couponCode").value = code;
       $("#couponCode").removeAttribute("aria-invalid");
-      $("#couponStatus").textContent = `Cupom ${code} aplicado: 10% de desconto nos ingressos. Taxa de serviço sem desconto.`;
+      $("#couponStatus").textContent = `Cupom ${code} aplicado: 25% de desconto nos ingressos. Taxa de serviço sem desconto.`;
     }
     updateSummary();
   });
@@ -465,7 +467,9 @@
           // A seleção exibida após o reload deve refletir a cobrança original.
           // A aprovação permanece exclusiva do servidor; dados locais são somente visuais.
           if (Object.hasOwn(ticketOptions, data.ticket) && Number.isInteger(data.quantity) && data.quantity >= 1 && data.quantity <= 5) {
-            state.coupon = validCoupons.includes(data.coupon) ? data.coupon : "";
+            const legacyCoupon = ["DOLCE10", "MARIF10", "BRUNOJ10", "PROMO10"].includes(data.coupon);
+            state.coupon = validCoupons.includes(data.coupon) || legacyCoupon ? data.coupon : "";
+            state.discountRate = legacyCoupon ? 10 : 25;
             $("#couponCode").value = state.coupon;
             if (state.coupon) $("#couponStatus").textContent = `Cupom ${state.coupon} aplicado ao PIX recuperado.`;
             state.ticket = data.ticket;

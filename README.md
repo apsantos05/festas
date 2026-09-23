@@ -67,4 +67,4 @@ Para 16 e 17 anos: R$ 25,00 + R$ 4,49 de taxa por ingresso. Open bar apenas de r
 
 ## Cupons
 
-DOLCE10, MARIF10, BRUNOJ10 e PROMO10 dão 10% de desconto no subtotal de qualquer categoria. Taxas não recebem desconto. Um cupom por compra; códigos normalizados e validados no servidor. Cupom integra a referência idempotente, os metadados e o token assinado. PIX gerado trava a edição do cupom e recupera o desconto ao recarregar. Pedidos antigos sem cupom continuam válidos.
+DOLCE25, MARIF25, BRUNOJ25 e PROMO25 dão 25% de desconto no subtotal de qualquer categoria. Taxas não recebem desconto. Um cupom por compra; códigos normalizados e validados no servidor. Cupom integra a referência idempotente, os metadados e o token assinado. PIX gerado trava a edição do cupom e recupera o desconto ao recarregar. Pedidos antigos sem cupom continuam válidos.
